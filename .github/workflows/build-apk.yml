@@ -1,0 +1,75 @@
+name: Build SARANGHAE BIMBEL v1.3.7 APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check source package
+        run: |
+          test -f SARANGHAE-BIMBEL-SOURCE-v1.3.7.zip
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+          cache-disabled: true
+
+      - name: Extract source
+        run: |
+          rm -rf build-source
+          mkdir build-source
+          unzip -q SARANGHAE-BIMBEL-SOURCE-v1.3.7.zip -d build-source
+          test -f build-source/settings.gradle
+          test -f build-source/build.gradle
+          test -f build-source/app/build.gradle
+          test -f build-source/app/src/main/java/com/saranghae/bimbel/MainActivity.java
+
+      - name: Check duplicate inset variables
+        working-directory: build-source
+        run: |
+          ! grep -nE 'int top=insets|int bottom=insets' app/src/main/java/com/saranghae/bimbel/MainActivity.java
+          grep -nE 'int insetTop=insets|int insetBottom=insets' app/src/main/java/com/saranghae/bimbel/MainActivity.java
+
+      - name: Build debug APK
+        working-directory: build-source
+        run: |
+          gradle --version
+          set -o pipefail
+          gradle clean assembleDebug --stacktrace --no-daemon 2>&1 | tee build.log
+
+      - name: Verify APK and version
+        working-directory: build-source
+        run: |
+          gradle printAppInfo --no-daemon
+          test -f app/build/outputs/apk/debug/app-debug.apk
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SARANGHAE-BIMBEL-v1.3.7-debug-apk
+          path: build-source/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload build log if build fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SARANGHAE-BIMBEL-v1.3.7-build-log
+          path: build-source/build.log
+          if-no-files-found: ignore
+          
